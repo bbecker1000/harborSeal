@@ -87,3 +87,53 @@ TO DO
 2021-10-08
 Quick git update on bb computer test
 
+
+
+
+#######
+#######
+
+
+2023-03-28
+# Field Data Data prep
+
+1. 1997_2022_Phocadata.xls    READY
+2. HARBOR SEALS POINT REYES 1976-1999  READY
+    A. ready_Major events               READY
+    B. ready pupping surveys          READY
+    C. ready molting surveys        READY  needs wide->long
+3. DisturbanceRate 2000-2022   READY   - combine the sheets
+    A. Breeding season         READY
+    B. Molting Season          READY
+4. Phoca Disturbances 1983_1996-1999  READY
+    A. Breeding season     READY
+    B. Molting Season      READY
+5. Coyote sightings       READY
+
+
+# Ocean data obtained
+6. MEI go back start 1979
+7. NPGO - DONE start 1950
+8. BEUTI - Done start 1988
+9. MOCI - Done start 1993
+
+# Analyses
+DV = A. # adults
+     B. pup/adult ratio (or pups with adult offset)
+     C. Molt counts
+
+analyses by Breeding or Molt Seasons
+
+1. GLMM / GAMM for covariates for all years
+  Use max from each year or fit GAMM to julian date?
+
+2. MARRS with just the MOCI or MEI or BEAUTI
+  use max from each year
+
+3. Other ideas HMM, or N-mixture.  Violates the repeated survey closure assumptions
+
+
+
+
+
+

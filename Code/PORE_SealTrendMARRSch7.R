@@ -17,9 +17,11 @@ library("readxl")
 ##%######################################################%##
 
 ## get PRNS data
-Phoca <- read_excel("Data/1997_2019_Phocadata.xls")
+Phoca <- read_excel("Data/1997_2022_Phocadata.xls")
 
 Phoca <- Phoca[-c(3:4, 8:10)]
+
+unique(Phoca$Age)
 
 ## need some year and julian date fields to plot by year and day of year
 library(lubridate)
@@ -34,10 +36,10 @@ Phoca$Julian <- yday(Phoca$Date2)
 library(plyr)
 library(dplyr)
 
-Phoca <- subset(Phoca, Age != "DEADPUP" | Age != "DEADADULT")
-
+Phoca <- Phoca %>% filter(Age != "DEADPUP" & Age != "DEADADULT")
+unique(Phoca$Age)
 ## and need to convert HPUP (typo in database!) to PUP
-Phoca$Age[Phoca$Age == "HPUP"] <- "PUP"
+#Phoca$Age[Phoca$Age == "HPUP"] <- "PUP"
 Phoca$Yearf <- as.factor(Phoca$Year)
 
 ## now within year plots to look at breeding and molting season peaks
@@ -52,7 +54,7 @@ Phoca.PUP <- dplyr::filter(Phoca, Age == "PUP")
 # (Silas) should this be April 15 to May 15 or April 20 to May 10??  right now using wider interval
 Phoca.breeding <- dplyr::filter(Phoca, Julian > 105 & Julian < 135)
 
-if (FALSE) { #remove this line and 80 to get this plot again
+#if (FALSE) { #remove this line and 80 to get this plot again
 d1 <- Phoca.PUP %>% 
   group_by(Subsite, Year) %>% 
   summarise_each(funs(MaxCount = max), Count)
@@ -77,7 +79,7 @@ p1<-ggplot(d3, aes(Year, MaxCount)) +
   geom_point() +
   geom_smooth(se = TRUE)
 p1 + facet_grid(. ~ Subsite) 
-}
+#}
 
 Phoca.Adult.Breed <- dplyr::filter(Phoca.Adult, Julian > 105 & Julian < 135) #April 15 to May 15
 
@@ -93,8 +95,33 @@ top1 <- dplyr::distinct(top1)
 plot.top1 <- ggplot(top1, aes(Year, Count, shape = Age, colour = Age)) + 
   geom_point() + 
   geom_smooth()
-plot.top1 + facet_wrap(~ Subsite) + labs(title = "Top 1 Data Point") #PB and PR don't have line; remove deadpup??
-#ggsave("plot.top1.jpg", width = 8, height = 6, units = "in")
+plot.top1 + facet_wrap(~ Subsite) + labs(title = "Raw Data Breeding Season High Count: 1997 - 2022") #PB and PR don't have line; remove deadpup??
+ggsave("plot.top1.jpg", width = 8, height = 6, units = "in")
+
+
+##################################
+## add in just a molt count
+# June 1 - JUne 30 = Julian days 150-180
+ 
+Phoca.molt.seas <- dplyr::filter(Phoca, Julian > 150 & Julian < 180)
+top1.molt <- tbl_df(Phoca.molt.seas) %>% 
+  group_by(Subsite, Yearf) %>%
+  top_n(n = 1, wt = Count)
+
+##remove any duplicate rows (some problem in the above queries!)
+top1.molt <- dplyr::distinct(top1.molt)
+
+#(silas) pr and pb missing lines connecting the dots 
+plot.top1.molt <- ggplot(top1.molt, aes(Year, Count)) + 
+  geom_point() + 
+  geom_smooth()
+plot.top1.molt + facet_wrap(~ Subsite) + labs(title = "Raw Data Molt Season High Count: 1997 - 2022") 
+ggsave("plot.top1.molt.jpg", width = 8, height = 6, units = "in")
+
+
+### end molt plot
+
+
 
 ## now make 3 files of "top 1 for breeding season for pups, adults, and pups + adults (later)
 top1.adult.breed <- dplyr::filter(top1, Age == "ADULT")
@@ -766,6 +793,9 @@ p1a <-
   labs(title = "Bolinas Lagoon", y = "Abundance", x = "Year") +
   ylim(175, 1200) + xlim(1995, 2021)
 
+
+p1a
+
 df$DE_m <- mod$DE_m
 #df$DE_lower <- df$DE_m-1.96*se[,2]
 #df$DE_upper <- df$DE_m+1.96*se[,2]
@@ -807,7 +837,11 @@ p5a <- ggplot(df) + geom_point(aes(years, exp(TP)), colour="salmon") + geom_line
 
 
 ## BL DE DP TB TP
+library(cowplot)
+
 plot1 <- cowplot::plot_grid(p1a, p2a, p3a, p4a, p5a)
+
+plot1
 
 title <- ggdraw() + 
   draw_label(
@@ -837,12 +871,12 @@ df$BL_m <- mod$BL_m
 df$BL_lower <- exp(df$BL_m)-1.96*se_b[,1]
 df$BL_upper <- exp(df$BL_m)+1.96*se_b[,1]
 
-df$year <- 1996:2019
+df$year <- 1996:2022
 p1b <- ggplot(df) + 
   geom_point(aes(years, exp(BL)), colour="salmon") + 
   geom_line(aes(years, exp(BL_m))) + 
   labs(title = "Bolinas Lagoon", y = "Abundance", x = "Year") +
-  ylim(175, 1200) + xlim(1995, 2021) 
+  ylim(175, 1200) + xlim(1995, 2023) 
   #geom_line(aes(years, BL_lower), linetype="dashed", color="red") + geom_line(aes(years, BL_upper), linetype="dashed", color="red") 
 
 df$DE_m <- mod$DE_m
@@ -850,7 +884,7 @@ df$DE_lower <- exp(df$DE_m)-1.96*se_b[,2]
 df$DE_upper <- exp(df$DE_m)+1.96*se_b[,2]
 p2b <- ggplot(df) + geom_point(aes(years, exp(DE)), colour="salmon")  + geom_line(aes(years, exp(DE_m))) + 
   labs(title="Drakes Estero", y="Abundance", x ="Year") + theme(legend.title = element_text(face = "bold")) +
-  ylim(175, 1200) + xlim(1995, 2021)
+  ylim(175, 1200) + xlim(1995, 2023)
   #geom_line(aes(years, DE_lower), linetype="dashed", color="red") + geom_line(aes(years, DE_upper), linetype="dashed", color="red") 
 
 df$DP_m <- mod$DP_m
@@ -858,7 +892,7 @@ df$DP_lower <- exp(df$DP_m)-1.96*se_b[,3]
 df$DP_upper <- exp(df$DP_m)+1.96*se_b[,3]
 p3b <- ggplot(df) + geom_point(aes(years, exp(DP)), colour="salmon") + geom_line(aes(years, exp(DP_m))) + 
   labs(title="Double Point", y="Abundance", x = "Year") + 
-  ylim(175, 1200) + xlim(1995, 2021)
+  ylim(175, 1200) + xlim(1995, 2023)
   #geom_line(aes(years, DP_lower), linetype="dashed", color="red") + geom_line(aes(years, DP_upper), linetype="dashed", color="red") 
 
 
@@ -867,7 +901,7 @@ df$TB_lower <- exp(df$TB_m)-1.96*se_b[,4]
 df$TB_upper <- exp(df$TB_m)+1.96*se_b[,4]
 p4b <- ggplot(df) + geom_point(aes(years, exp(TB)), colour="salmon") + geom_line(aes(years, exp(TB_m))) + 
   labs(title="Tomales Bay", y="Abundance", x = "Year") +
-  ylim(175, 1200) + xlim(1995, 2021)
+  ylim(175, 1200) + xlim(1995, 2023)
   #geom_line(aes(years, TB_lower), linetype="dashed", color="red") + geom_line(aes(years, TB_upper), linetype="dashed", color="red") 
 
 df$TP_m <- mod$TP_m
@@ -875,7 +909,7 @@ df$TP_lower <- exp(df$TP_m)-1.96*se_b[,5]
 df$TP_upper <- exp(df$TP_m)+1.96*se_b[,5]
 p5b <- ggplot(df) + geom_point(aes(years, exp(TP)), colour="salmon") + geom_line(aes(years, exp(TP_m))) + 
   labs(title="Tomales Point", y="Abundance", x = "Year") +
-  ylim(175, 1200) + xlim(1995, 2021)
+  ylim(175, 1200) + xlim(1995, 2023)
   #geom_line(aes(years, TP_lower), linetype="dashed", color="red") + geom_line(aes(years, TP_upper), linetype="dashed", color="red") 
 
 
