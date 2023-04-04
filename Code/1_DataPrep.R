@@ -1,6 +1,5 @@
 # DataPrep.R
 library("readxl")
-library(dplyr)
 library(tidyverse)
 library(lubridate)
 X1997_2022_Phocadata <- read_excel("Data/1997_2022_Phocadata.xls", 
@@ -38,7 +37,7 @@ pup_season_1976_1999$Season <- "Breeding"
 #   rename(c("Site" = "SUBSITE", "Count" = "COUNT", "Age" = "AGE", "Date" = "DATE"))
 
 pup_season_1976_1999 <- pup_season_1976_1999 %>%
-  rename(c("SUBSITE" = "Site", "COUNT" = "Count", "AGE" = "Age", "DATE"= "Date"))
+  rename(c("Site" = "SUBSITE", "Count" = "COUNT", "Age" = "AGE", "Date"= "DATE"))
 
 
 #move column names for stacking
@@ -57,11 +56,9 @@ all_season_1976_1995 <- all_season_1976_1995[,-6] #remove year
 all_season_1976_1995$Tide_Level <- NA
 all_season_1976_1995 <- all_season_1976_1995 %>% relocate("Tide_Level", .after = "Site")
 
-
-
-
+# newer data
 X1997_2022_Phocadata <- X1997_2022_Phocadata %>%
-  rename(c("Subsite" = "Site"))
+  rename(c("Site" = "Subsite"))
 #add season
 X1997_2022_Phocadata$Month <- month(X1997_2022_Phocadata$Date)
 X1997_2022_Phocadata$Season <- ifelse(X1997_2022_Phocadata$Month < 6, "Breeding", "Molt")
@@ -90,13 +87,20 @@ PhocaData <- PhocaData %>% filter(!is.na(Count))
 PhocaData <- PhocaData[,-3]
 
 
-# remove dead pups and dead adults
-PhocaData <- filter(PhocaData, Age != "DEADPUP" & Age != "DEADADULT" )
+# deal with dead pups and dead adults 
+# Add in deadpups (represent productivity and deadadults
+PhocaData <- filter(PhocaData, Age != "DEADADULT" )
+
+## get top of each year*season
+PhocaData$Year <- year(PhocaData$Date)
+PhocaData <- PhocaData %>% relocate("Year", .before = "Date")
+
+
+
 #histogram
 ggplot(PhocaData, aes(Count)) +
                        geom_histogram() + facet_grid(Site~Age)
            
-
 
 t1 <- PhocaData %>%
   dplyr::group_by(Date, Site, Season, Age) %>%
@@ -110,15 +114,14 @@ t1
 PhocaData_Wide <- PhocaData %>% 
   distinct(Date, Site, Season, Age, .keep_all = TRUE) %>% #remove any duplicate rows
   pivot_wider(
-  names_from = c(Site, Age),
+  names_from = c(Age),
   values_from = Count)
-PhocaData_Wide
+PhocaData_Wide # for analysis of pup:adult ratios
 
 ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   geom_point(alpha = 0.1) +
   geom_smooth() +
   facet_grid(Season~Site)
-
 
 ## get top of each year*season
 PhocaData$Year <- year(PhocaData$Date)
@@ -127,10 +130,428 @@ top1 <- as_tibble(PhocaData) %>%
   group_by(Site, Year, Age, Season) %>%
   top_n(n = 1, wt = Count)
 
+#sum to look at total population change
+top1_sum <- top1 %>%
+  distinct(Year, Site, Season, Age, .keep_all = TRUE) %>% #remove any duplicate rows
+  select(-Date) %>%
+  group_by(Year, Age, Season) %>%
+  dplyr::summarize(Total = sum(Count)) 
+top1_sum
+
+ggplot(top1_sum, aes(x = Year, y = Total, color = Age)) +
+  geom_point() +
+  geom_smooth() +
+  facet_grid(.~Season)
+
+#for site analyses
+top1_wide <- top1 %>% 
+  distinct(Year, Site, Season, Age, .keep_all = TRUE) %>% #remove any duplicate rows
+  select(-Date) %>%
+  pivot_wider(
+    names_from = c(Age),
+    values_from = Count)
+top1_wide # for analysis of pup:adult ratios
+
+
 ggplot(top1, aes(x = Year, y = Count, color = Age)) +
   geom_point(alpha = 0.5) +
-  geom_smooth(method = "gam") +
-  #geom_line() +
+  geom_smooth(span = 1) +
   facet_grid(Season~Site)
+
+##########################
+## let's add in the covariates
+# BEAUTI, MOCI, MEI, NPGO, Disturbance, Coyote
+##########################
+
+# BEAUTI
+BEUTI_monthly <- read_csv("Data/BEUTI_monthly.csv")
+BEUTI_monthly
+#View(BEUTI_monthly) #starting in 1988, use 38N
+#use Feb-May data
+BEUTI_2_5 <- 
+  BEUTI_monthly %>%
+      select(year, month, `38N`) %>%
+          filter(month >= 2 & month <=5) %>%
+              group_by(year) %>%
+                dplyr::summarize(Spring_BEUTI = mean(`38N`)) #remember conflicts between dplyr and plyr!
+BEUTI_2_5 <- BEUTI_2_5 %>%
+  rename(c("year" = "Year")) 
+
+BEUTI_2_5  #ready
+
+#MOCI
+
+MOCI <- read_csv("Data/CaliforniaMOCI.csv")
+MOCI[,-1]
+
+MOCI_Nor_Cen <- 
+  MOCI %>%
+  select(`Year`, `Season`, `North California (38-42N)`, `Central California (34.5-38N)`) %>%
+  filter(Season == "JFM" | Season == "AMJ") %>%
+  group_by(Year, Season) %>%
+  dplyr::summarize(MOCI_Nor_Cen = (`North California (38-42N)` + `Central California (34.5-38N)` / 2)) %>%
+  pivot_wider(names_from = c(Season),
+                values_from = (MOCI_Nor_Cen))
+MOCI_Nor_Cen
+
+MOCI_Nor_Cen <- MOCI_Nor_Cen %>%
+  rename(c("AMJ" = "MOCI_AMJ", "JFM" = "MOCI_JFM")) %>%  #rename
+  relocate("MOCI_AMJ", .after = "MOCI_JFM")             #move colums
+    
+MOCI_Nor_Cen #ready
+
+#MEI
+MEI <- read_excel("Data/2023_Analysis/MEI.xlsx")
+MEI
+
+MEI <- MEI %>% select("YEAR", "DJ",  "JF", "FM", "MA", "AM", "MJ")
+
+MEI <- MEI %>%
+  rename(c("DJ" = "MEI_DJ", "JF" = "MEI_JF",  
+           "FM" = "MEI_FM", "MA" = "MEI_MA",    
+           "AM" = "MEI_AM", "MJ" = "MEI_MJ")) 
+MEI <- MEI %>%
+  rename(c("YEAR" = "Year")) 
+MEI #ready
+
+#NPGO
+NPGO <- read_excel("Data/2023_Analysis/NPGO.xlsx")
+NPGO #we'll use months 2-5
+
+NPGO_2_5 <- 
+  NPGO %>%
+  filter(MONTH >= 2 & MONTH <=5) %>%
+  group_by(YEAR) %>%
+  dplyr::summarize(Spring_NPGO = mean(NPGO)) #remember conflicts between dplyr and plyr!
+
+NPGO_2_5 <- NPGO_2_5 %>%
+  rename(c("YEAR" = "Year")) 
+NPGO_2_5  #ready
+
+
+#Disturbance
+#need to combine older and newer disturbance data
+
+PHOCA_DISTURBANCE_1983_1996_99 <- read_excel("Data/2023_Analysis/PHOCA DISTURBANCE 1983 and 1996-99 FINAL 020223.xlsx")
+PHOCA_DISTURBANCE_1983_1996_99
+
+PHOCA_DISTURBANCE_1983_1996_99 <- PHOCA_DISTURBANCE_1983_1996_99[,-c(6, 7)]
+PHOCA_DISTURBANCE_1983_1996_99$NumberOfDisturbances <- as.numeric(PHOCA_DISTURBANCE_1983_1996_99$NumberOfDisturbances)
+
+PHOCA_DISTURBANCE_1983_1996_99 <- PHOCA_DISTURBANCE_1983_1996_99 %>%
+  rename(c("Seaon" = "Season")) #rename
+
+
+PHOCA_DISTURBANCE_2000To2022 <- read_excel("Data/2023_Analysis/DisturbanceRateBySeasonBySite_2000To2022.xlsx")
+PHOCA_DISTURBANCE_2000To2022
+
+PHOCA_DISTURBANCE_2000To2022 <- PHOCA_DISTURBANCE_2000To2022 %>%
+  rename(c("YEAR" = "Year")) #rename
+
+PHOCA_DISTURBANCE_2000To2022 <- PHOCA_DISTURBANCE_2000To2022[,-c(6, 7, 9)]
+
+#stack 'em
+
+Phoca_Disturbance <- rbind(PHOCA_DISTURBANCE_1983_1996_99, PHOCA_DISTURBANCE_2000To2022)
+Phoca_Disturbance$DisturbanceRate <- Phoca_Disturbance$NumberOfDisturbances / Phoca_Disturbance$NSurveys
+Phoca_Disturbance <- Phoca_Disturbance[,-c(2,4)] #remove season and SiteName...all are breeding
+Phoca_Disturbance <- Phoca_Disturbance %>%
+  rename(c("SiteCode" = "Site")) 
+Phoca_Disturbance$Site <- ifelse(Phoca_Disturbance$Site == "PRH", "PR", Phoca_Disturbance$Site)
+
+Phoca_Disturbance #Ready
+
+#Coyote
+Coyote <- read_excel("Data/2023_Analysis/CoyoteSightings.xlsx")
+Coyote 
+
+Coyote$Site <- ifelse(Coyote$Site == "PRH", "PR", Coyote$Site)
+
+Coyote$CoyoteDays <- Coyote$DaysWithSightings / Coyote$Surveys
+hist(Coyote$CoyoteDays)  #Ready
+
+#Join covariates to top1_wide
+
+# BEUTI_2_5
+# MOCI_Nor_Cen
+# NPGO_2_5
+# MEI
+# Phoca_Disturbance
+# Coyote
+
+top1_wide
+
+top1_wide_A <- left_join(top1_wide, BEUTI_2_5, by = "Year")
+top1_wide_A
+
+top1_wide_B <- left_join(top1_wide_A, MOCI_Nor_Cen, by = "Year")
+top1_wide_C <- left_join(top1_wide_B, NPGO_2_5, by = "Year")
+top1_wide_D <- left_join(top1_wide_C, MEI, by = "Year")
+top1_wide_E <- left_join(top1_wide_D, Phoca_Disturbance, by = c("Year", "Site"))
+top1_wide_F <- left_join(top1_wide_E, Coyote, by = c("Year", "Site"))
+View(top1_wide_F)
+
+top1_wide <- top1_wide_F #ready for GLMMS
+
+
+#glmms
+library(lme4)
+
+m1.ADULT <- glmer(ADULT ~ 
+                scale(Year) + 
+                Site + 
+                Season +
+               #scale(Spring_BEUTI) +
+               #scale(MOCI_AMJ) +
+               scale(Spring_NPGO) +
+               #scale(MEI) +
+               scale(DisturbanceRate) +
+               scale(CoyoteDays) +
+               (1|Site) + (1|Season), family = negative.binomial(1), data = top1_wide)
+summary(m1.ADULT)
+plot_model(m1.ADULT, type = "eff") 
+
+
+
+
+
+
+
+m1.PUP <- glmer(PUP ~ Year + Site +
+                  #Spring_BEUTI +
+                  #MOCI_AMJ +
+                  #Spring_NPGO + 
+                  MEI + 
+                  scale(CoyoteDays) +
+                  (1|Site), family = negative.binomial(1), 
+                  #data = top1_wide)
+                  data = subset(top1_wide, Season == "Breeding"))
+
+summary(m1.PUP)
+
+## gamm
+library(mgcv)
+m1.gamm <- gamm(cbind(PUP, ADULT) ~ 
+       s(Year) + 
+       Site +
+       #s(Spring_BEUTI) +
+       #s(MOCI_AMJ) +
+       s(Spring_NPGO) + 
+       s(scale(CoyoteDays)),
+       random=list(Site=~1), 
+       family = binomial, 
+     #data = top1_wide)
+     data = subset(top1_wide, Season == "Breeding"))
+
+
+m1.gamm <- gamm((PUP/ADULT) ~ 
+                  s(Year) + 
+                  Site +
+                  #s(Spring_BEUTI) +
+                  #s(MOCI_AMJ) +
+                  s(Spring_NPGO) + 
+                  s(scale(CoyoteDays)),
+                random=list(Site=~1, Year=~1), 
+                family = Gamma, 
+                #data = top1_wide)
+                data = subset(top1_wide, Season == "Breeding"))
+
+plot(m1.gamm$gam,pages=1)
+summary(m1.gamm$gam)
+plot_model(m1.gamm$gam)
+
+  
+
+plot_model(m1.gamm, type = "pred")
+
+
+m1.PUP_ADULT_BEUTI <- glmer(cbind(PUP, ADULT) ~ Year + Site +
+                  Spring_BEUTI +
+                  #MOCI_AMJ +
+                  #Spring_NPGO + 
+                  scale(CoyoteDays) +
+                  #(1|Year) + 
+                    (1|Site), family = binomial, data = top1_wide)
+summary(m1.PUP_ADULT_BEUTI)
+
+m2.PUP_ADULT_MOCI <- glmer(cbind(PUP, ADULT) ~ Year + Site +
+                        #Spring_BEUTI +
+                        MOCI_JFM +
+                        #Spring_NPGO + 
+                        CoyoteDays +
+                        (1|Year) + (1|Site), family = binomial, data = top1_wide)
+summary(m2.PUP_ADULT_MOCI)
+
+m3.PUP_ADULT_NPGO <- glmer(cbind(PUP, ADULT) ~ Year + Site +
+                             #Spring_BEUTI +
+                             #MOCI_JFM +
+                             scale(Spring_NPGO) + 
+                             scale(CoyoteDays) +
+                            # (1|Year) + 
+                             (1|Site), family = binomial, data = top1_wide)
+summary(m3.PUP_ADULT_NPGO)
+
+library(sjPlot)
+plot_model(m3.PUP_ADULT_NPGO, type = "pred") #, terms = c("barthtot", "c161sex"))
+plot_model(m1.PUP_ADULT_BEUTI, type = "pred", terms="Spring_BEUTI")
+
+adult.stan.glmm <- stan_glmer(ADULT ~ 
+                                Year + 
+                                Site +
+                                Spring_BEUTI +
+                                MOCI_AMJ +
+                                Spring_NPGO + 
+                                CoyoteDays + 
+                              (1|Site), 
+                              family = neg_binomial_2, 
+                              #data = top1_wide)
+                              data = subset(top1_wide, Season == "Breeding"),
+                              chains = 3, iter = 1000)
+
+summary(adult.stan.gamm, digits = 3)
+plot_model(adult.stan.gamm, type = "pred")
+
+
+
+
+
+## rstan
+library(rstanarm)
+
+adult.stan.gamm <- stan_gamm4(ADULT ~ 
+                              s(Year) + 
+                              Site +
+                              #s(Spring_BEUTI) +
+                              s(MOCI_AMJ) +
+                              #Spring_NPGO + 
+                              s(CoyoteDays),
+                            random= ~(1|Site), 
+                            family = neg_binomial_2, 
+                            #data = top1_wide)
+                            data = subset(top1_wide, Season == "Breeding"),
+                            chains = 3, iter = 1000)
+
+summary(adult.stan.gamm, digits = 3)
+plot_model(adult.stan.gamm, type = "pred")
+
+
+
+pup.stan.gamm <- stan_gamm4(PUP ~ 
+                  s(Year) + 
+                  #Site +
+                  s(Spring_BEUTI) +
+                  #MOCI_AMJ +
+                  #Spring_NPGO + 
+                  s(CoyoteDays),
+                random= ~(1|Site), 
+                family = neg_binomial_2, 
+                #data = top1_wide)
+                data = subset(top1_wide, Season == "Breeding"),
+                chains = 3, iter = 1000)
+
+summary(pup.stan.gamm, digits = 3)
+
+plot_model(pup.stan.gamm)
+
+
+
+
+ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~ 
+                              s(Year) + 
+                              Site +
+                              s(Spring_BEUTI) +
+                              s(MOCI_AMJ) +
+                              s(Spring_NPGO) + 
+                              CoyoteDays,
+                            random= ~(1|Site), 
+                            family = binomial, 
+                            #data = top1_wide)
+                            data = subset(top1_wide),
+                            chains = 1, iter = 1000, thin = 2, adapt_delta = 0.96)
+
+summary(ratio.stan.gamm, digits = 3)
+plot_model(ratio.stan.gamm, type = "pred")
+plot_nonlinear(ratio.stan.gamm, smooths = "s(Spring_NPGO)", alpha = 2/3)
+
+p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide$Site, prob = 0.8) #+
+
+
+
+CHAINS <- 3
+CORES <- 16
+SEED <- 123
+ITER <- 1000
+WARMUP <- 300
+THIN <- 2
+
+#PRIOR <- normal(-0.022, 0.007)
+PRIOR <- normal(0, 0.05)
+
+ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~ 
+    s(Year) + 
+    s(Site) + 
+    #s(Spring_BEUTI) + 
+    s(Spring_NPGO) + 
+    s(CoyoteDays),
+  random = ~ ~(1|Site) + (1|Year), 
+  data = subset(top1_wide), 
+  family = binomial, 
+  prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, thin = THIN, warmup = WARMUP, 
+  adapt_delta = 0.97)
+
+beepr::beep(0)
+
+#save(ratio.stan.gamm,
+#     file = "Results/ModelOutputs/m.stan_gamm.TP_Multi.01.RData")
+
+#loo.TP_Multi.gamm.1 <- loo(m.stan_gamm.TP_Multi.01, cores = getOption("mc.cores", 16))
+
+summary(ratio.stan.gamm, digits = 3)
+performance::r2(ratio.stan.gamm)
+
+color_scheme_set(scheme = "brightblue")
+p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide$Site, 
+                                  facet_args = list(scales = "fixed", ncol = 5), prob = 0.8) #+
+  #ylim(c(-1.5,1.5))  +
+  #geom_hline(yintercept = 0, lty = 2) + 
+  #ylab("15N Trophic Poisition")
+p.ratio.stan.gamm
+
+theme_set(theme_grey())  ## make ggplot look good
+color_scheme_set("brightblue")  # best = brightblue and pink
+ppc_intervals_grouped(
+  y = CSIA_Joined$TP_Multi,
+  yrep = posterior_predict(m.stan_gamm.TP_Multi.01),
+  x = CSIA_Joined$SOI, #CCWI,
+  group = CSIA_Joined$Species #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "SOI", 
+    y = "TP Multi"
+  ) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  geom_smooth(method = "gam", se = FALSE, span = 10) +
+  scale_y_continuous(limits = c(2.25,3.6), breaks = seq(2.25,3.6,0.25)) +
+  scale_x_continuous(limits = c(-2.5, 2.5)) +
+  
+  #geom_hline(yintercept = 0, lty = 2) +
+  theme(legend.position = "none") +
+  theme_grey(base_size = 16)
+
+
+
+
+                    
+                    
+                  
+
+
+
+
+
+
+
 
 
