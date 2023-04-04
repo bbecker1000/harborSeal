@@ -33,8 +33,9 @@ Phoca$Year <- year(Phoca$Date2)
 Phoca$Julian <- yday(Phoca$Date2)
 
 ## Looks like need to remove Dead adult and deadpup
-library(plyr)
+
 library(dplyr)
+library(plyr)
 
 Phoca <- Phoca %>% filter(Age != "DEADPUP" & Age != "DEADADULT")
 unique(Phoca$Age)
