@@ -120,6 +120,7 @@ ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   facet_grid(Season~Site)
 
 
+<<<<<<< HEAD
 ## get top of each year*season
 PhocaData$Year <- year(PhocaData$Date)
 
@@ -134,3 +135,5 @@ ggplot(top1, aes(x = Year, y = Count, color = Age)) +
   facet_grid(Season~Site)
 
 
+=======
+>>>>>>> 009182561ca7a9ee7a06e57601bf6dcb523debf0
