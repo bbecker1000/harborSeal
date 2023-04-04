@@ -2,6 +2,7 @@
 library("readxl")
 library(dplyr)
 library(tidyverse)
+library(lubridate)
 X1997_2022_Phocadata <- read_excel("Data/1997_2022_Phocadata.xls", 
                                    col_types = c("date", "text", "numeric", 
                                                  "numeric", "skip", "text", "numeric", 
@@ -35,14 +36,51 @@ pup_season_1976_1999 <- pup_season_1976_1999 %>%
 #move column names for stacking
 pup_season_1976_1999 <- pup_season_1976_1999 %>% relocate("Age", .after = "Season")
 
-View(pup_season_1976_1999)
+#View(pup_season_1976_1999)
+#View(all_season_1976_1999)
+
 
 all_season_1976_1999 <- rbind(pup_season_1976_1999, molt_1976_1999)
-View(all_season_1976_1999)
-#looks good
+#View(all_season_1976_1999)
+# Remove data after 1995 because in newer database.
+all_season_1976_1999$Year <- year(all_season_1976_1999$Date)
+all_season_1976_1995 <- all_season_1976_1999 %>%  filter(all_season_1976_1999$Year < 1996)
+all_season_1976_1995 <- all_season_1976_1995[,-6] #remove year
+all_season_1976_1995$Tide_Level <- NA
+all_season_1976_1995 <- all_season_1976_1995 %>% relocate("Tide_Level", .after = "Site")
 
-#now merge with 1997-2022 data
 
+X1997_2022_Phocadata <- X1997_2022_Phocadata %>%
+  rename(c("Site" = "Subsite"))
+X1997_2022_Phocadata <- X1997_2022_Phocadata %>% relocate("Age", .after = "Season")
+X1997_2022_Phocadata <- X1997_2022_Phocadata[,-4] #remove tide time
+
+## combine data
+PhocaData <- rbind(all_season_1976_1995, X1997_2022_Phocadata)
+View(PhocaData)
+## get ages consistenf
+PhocaData$Age <- ifelse(PhocaData$Age == "AD", "ADULT", PhocaData$Age)
+PhocaData$Age <- ifelse(PhocaData$Age == "Adult", "ADULT", PhocaData$Age)
+PhocaData$Count <- as.numeric(PhocaData$Count)
+PhocaData$Age <- as.factor(PhocaData$Age)
+PhocaData$Season <- as.factor(PhocaData$Season)
+PhocaData$Site <- as.factor(PhocaData$Site)
+PhocaData$Site <- ifelse(PhocaData$Site == "PRH", "PR", PhocaData$Site)
+
+
+# remove dead pups and dead adults
+PhocaData <- filter(PhocaData, Age != "DEADPUP" & Age != "DEADADULT" )
+#histogral
+ggplot(PhocaData, aes(Count)) +
+                       geom_histogram() + facet_grid(Site~Age)
+           
+
+            
+
+#pivot wider
+PhocaData_Wide <- PhocaData %>% pivot_wider(
+  names_from = Age,
+  values_from = Count)
 
 
 
