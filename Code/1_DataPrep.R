@@ -122,7 +122,3 @@ ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   facet_grid(Season~Site)
 
 
-
-
-
-
