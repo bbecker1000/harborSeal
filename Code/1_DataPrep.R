@@ -114,15 +114,23 @@ PhocaData_Wide <- PhocaData %>%
   values_from = Count)
 PhocaData_Wide
 
-
-
 ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   geom_point(alpha = 0.1) +
   geom_smooth() +
   facet_grid(Season~Site)
 
 
+## get top of each year*season
+PhocaData$Year <- year(PhocaData$Date)
 
+top1 <- as_tibble(PhocaData) %>% 
+  group_by(Site, Year, Age, Season) %>%
+  top_n(n = 1, wt = Count)
 
+ggplot(top1, aes(x = Year, y = Count, color = Age)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "gam") +
+  #geom_line() +
+  facet_grid(Season~Site)
 
 
