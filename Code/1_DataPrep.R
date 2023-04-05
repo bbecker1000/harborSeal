@@ -123,6 +123,7 @@ ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   geom_smooth() +
   facet_grid(Season~Site)
 
+
 ## get top of each year*season
 PhocaData$Year <- year(PhocaData$Date)
 
@@ -555,3 +556,8 @@ ppc_intervals_grouped(
 
 
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> 009182561ca7a9ee7a06e57601bf6dcb523debf0
+>>>>>>> d21cfc6178f6b9812389e0c758089e84968ea807
