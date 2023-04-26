@@ -120,7 +120,7 @@ PhocaData_Wide # for analysis of pup:adult ratios
 
 ggplot(PhocaData, aes(x = Date, y = Count, color = Age)) +
   geom_point(alpha = 0.1) +
-  geom_smooth() +
+  geom_smooth( level = 0.8) +
   facet_grid(Season~Site)
 
 
@@ -176,7 +176,7 @@ BEUTI_2_5 <-
               group_by(year) %>%
                 dplyr::summarize(Spring_BEUTI = mean(`38N`)) #remember conflicts between dplyr and plyr!
 BEUTI_2_5 <- BEUTI_2_5 %>%
-  rename(c("year" = "Year")) 
+  rename(c("Year" = "year")) 
 
 BEUTI_2_5  #ready
 
@@ -196,7 +196,7 @@ MOCI_Nor_Cen <-
 MOCI_Nor_Cen
 
 MOCI_Nor_Cen <- MOCI_Nor_Cen %>%
-  rename(c("AMJ" = "MOCI_AMJ", "JFM" = "MOCI_JFM")) %>%  #rename
+  rename(c("MOCI_AMJ" = "AMJ", "MOCI_JFM" = "JFM")) %>%  #rename
   relocate("MOCI_AMJ", .after = "MOCI_JFM")             #move colums
     
 MOCI_Nor_Cen #ready
@@ -208,11 +208,11 @@ MEI
 MEI <- MEI %>% select("YEAR", "DJ",  "JF", "FM", "MA", "AM", "MJ")
 
 MEI <- MEI %>%
-  rename(c("DJ" = "MEI_DJ", "JF" = "MEI_JF",  
-           "FM" = "MEI_FM", "MA" = "MEI_MA",    
-           "AM" = "MEI_AM", "MJ" = "MEI_MJ")) 
+  rename(c("MEI_DJ" = "DJ", "MEI_JF" = "JF",  
+           "MEI_FM" = "FM", "MEI_MA" = "MA",    
+           "MEI_AM" = "AM", "MEI_MJ" = "MJ")) 
 MEI <- MEI %>%
-  rename(c("YEAR" = "Year")) 
+  rename(c("Year" = "YEAR")) 
 MEI #ready
 
 #NPGO
@@ -226,7 +226,7 @@ NPGO_2_5 <-
   dplyr::summarize(Spring_NPGO = mean(NPGO)) #remember conflicts between dplyr and plyr!
 
 NPGO_2_5 <- NPGO_2_5 %>%
-  rename(c("YEAR" = "Year")) 
+  rename(c("Year" = "YEAR")) 
 NPGO_2_5  #ready
 
 
@@ -240,14 +240,14 @@ PHOCA_DISTURBANCE_1983_1996_99 <- PHOCA_DISTURBANCE_1983_1996_99[,-c(6, 7)]
 PHOCA_DISTURBANCE_1983_1996_99$NumberOfDisturbances <- as.numeric(PHOCA_DISTURBANCE_1983_1996_99$NumberOfDisturbances)
 
 PHOCA_DISTURBANCE_1983_1996_99 <- PHOCA_DISTURBANCE_1983_1996_99 %>%
-  rename(c("Seaon" = "Season")) #rename
+  rename(c("Season" = "Seaon")) #rename
 
 
 PHOCA_DISTURBANCE_2000To2022 <- read_excel("Data/2023_Analysis/DisturbanceRateBySeasonBySite_2000To2022.xlsx")
 PHOCA_DISTURBANCE_2000To2022
 
 PHOCA_DISTURBANCE_2000To2022 <- PHOCA_DISTURBANCE_2000To2022 %>%
-  rename(c("YEAR" = "Year")) #rename
+  rename(c("Year" = "YEAR")) #rename
 
 PHOCA_DISTURBANCE_2000To2022 <- PHOCA_DISTURBANCE_2000To2022[,-c(6, 7, 9)]
 
@@ -257,7 +257,7 @@ Phoca_Disturbance <- rbind(PHOCA_DISTURBANCE_1983_1996_99, PHOCA_DISTURBANCE_200
 Phoca_Disturbance$DisturbanceRate <- Phoca_Disturbance$NumberOfDisturbances / Phoca_Disturbance$NSurveys
 Phoca_Disturbance <- Phoca_Disturbance[,-c(2,4)] #remove season and SiteName...all are breeding
 Phoca_Disturbance <- Phoca_Disturbance %>%
-  rename(c("SiteCode" = "Site")) 
+  rename(c("Site" = "SiteCode")) 
 Phoca_Disturbance$Site <- ifelse(Phoca_Disturbance$Site == "PRH", "PR", Phoca_Disturbance$Site)
 
 Phoca_Disturbance #Ready
@@ -290,9 +290,15 @@ top1_wide_C <- left_join(top1_wide_B, NPGO_2_5, by = "Year")
 top1_wide_D <- left_join(top1_wide_C, MEI, by = "Year")
 top1_wide_E <- left_join(top1_wide_D, Phoca_Disturbance, by = c("Year", "Site"))
 top1_wide_F <- left_join(top1_wide_E, Coyote, by = c("Year", "Site"))
-View(top1_wide_F)
+#View(top1_wide_F)
+
 
 top1_wide <- top1_wide_F #ready for GLMMS
+#add coyote 0/1
+top1_wide$Coyote.01 <- ifelse(top1_wide$CoyoteDays > 0, 1, 0)
+
+
+
 
 
 #glmms
@@ -301,34 +307,52 @@ library(lme4)
 m1.ADULT <- glmer(ADULT ~ 
                 scale(Year) + 
                 Site + 
-                Season +
+               Season +
                #scale(Spring_BEUTI) +
                #scale(MOCI_AMJ) +
                scale(Spring_NPGO) +
                #scale(MEI) +
                scale(DisturbanceRate) +
                scale(CoyoteDays) +
-               (1|Site) + (1|Season), family = negative.binomial(1), data = top1_wide)
+            
+               (1|Site) +
+                + (1|Season), 
+                 family = negative.binomial(1), data = top1_wide)
 summary(m1.ADULT)
-plot_model(m1.ADULT, type = "eff") 
+sjPlot::plot_model(m1.ADULT, type = "eff") 
+plot(m1.ADULT)
 
 
+unique(top1_wide$Site)
+
+#for pup analysis, select only breeding season and use main 5 colonies
 
 
+target <- c("DP", "DE", "BL", "TP", "TB")
 
 
+top1_wide_pup <- top1_wide %>%
+                 filter(Season == "Breeding") %>%
+                           filter(Site %in% target)
 
-m1.PUP <- glmer(PUP ~ Year + Site +
+library(sjPlot)
+
+m1.PUP <- glmer(cbind(PUP, ADULT) ~ scale(Year) + Site +
                   #Spring_BEUTI +
-                  #MOCI_AMJ +
+                  MOCI_AMJ +
                   #Spring_NPGO + 
-                  MEI + 
+                  #MEI + 
+                  scale(DisturbanceRate) +
                   scale(CoyoteDays) +
-                  (1|Site), family = negative.binomial(1), 
+                  (1|Site), family = binomial,# negative.binomial(1),  #poisson overdispersed
                   #data = top1_wide)
-                  data = subset(top1_wide, Season == "Breeding"))
+                  data = subset(top1_wide_pup))
 
 summary(m1.PUP)
+sjPlot::plot_model(m1.PUP, type = "eff") 
+plot(m1.PUP)
+
+
 
 ## gamm
 library(mgcv)
@@ -359,7 +383,7 @@ m1.gamm <- gamm((PUP/ADULT) ~
 
 plot(m1.gamm$gam,pages=1)
 summary(m1.gamm$gam)
-plot_model(m1.gamm$gam)
+sjPlot::plot_model(m1.gamm$gam)
 
   
 
@@ -377,7 +401,7 @@ summary(m1.PUP_ADULT_BEUTI)
 
 m2.PUP_ADULT_MOCI <- glmer(cbind(PUP, ADULT) ~ Year + Site +
                         #Spring_BEUTI +
-                        MOCI_JFM +
+                        JFM +
                         #Spring_NPGO + 
                         CoyoteDays +
                         (1|Year) + (1|Site), family = binomial, data = top1_wide)
@@ -429,7 +453,7 @@ adult.stan.gamm <- stan_gamm4(ADULT ~
                             random= ~(1|Site), 
                             family = neg_binomial_2, 
                             #data = top1_wide)
-                            data = subset(top1_wide, Season == "Breeding"),
+                            data = subset(top1_wide_pup),
                             chains = 3, iter = 1000)
 
 summary(adult.stan.gamm, digits = 3)
@@ -467,7 +491,7 @@ ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~
                             random= ~(1|Site), 
                             family = binomial, 
                             #data = top1_wide)
-                            data = subset(top1_wide),
+                            data = subset(top1_wide_pup),
                             chains = 1, iter = 1000, thin = 2, adapt_delta = 0.96)
 
 summary(ratio.stan.gamm, digits = 3)
@@ -489,13 +513,13 @@ THIN <- 2
 PRIOR <- normal(0, 0.05)
 
 ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~ 
-    s(Year) + 
+    s(scale(Year) + 
     s(Site) + 
     #s(Spring_BEUTI) + 
     s(Spring_NPGO) + 
-    s(CoyoteDays),
+    s(scale(CoyoteDays)),
   random = ~ ~(1|Site) + (1|Year), 
-  data = subset(top1_wide), 
+  data = subset(top1_wide_pup), 
   family = binomial, 
   prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, thin = THIN, warmup = WARMUP, 
   adapt_delta = 0.97)
@@ -511,7 +535,7 @@ summary(ratio.stan.gamm, digits = 3)
 performance::r2(ratio.stan.gamm)
 
 color_scheme_set(scheme = "brightblue")
-p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide$Site, 
+p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide_pup$Site, 
                                   facet_args = list(scales = "fixed", ncol = 5), prob = 0.8) #+
   #ylim(c(-1.5,1.5))  +
   #geom_hline(yintercept = 0, lty = 2) + 
@@ -550,14 +574,3 @@ ppc_intervals_grouped(
 
 
 
-
-
-
-
-
-
-<<<<<<< HEAD
-=======
-=======
->>>>>>> 009182561ca7a9ee7a06e57601bf6dcb523debf0
->>>>>>> d21cfc6178f6b9812389e0c758089e84968ea807
