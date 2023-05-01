@@ -157,7 +157,9 @@ top1_wide # for analysis of pup:adult ratios
 ggplot(top1, aes(x = Year, y = Count, color = Age)) +
   geom_point(alpha = 0.5) +
   geom_smooth(span = 1) +
+  #xlim(1997,2022) +
   facet_grid(Season~Site)
+
 
 ##########################
 ## let's add in the covariates
@@ -294,18 +296,24 @@ top1_wide_F <- left_join(top1_wide_E, Coyote, by = c("Year", "Site"))
 
 
 top1_wide <- top1_wide_F #ready for GLMMS
-#add coyote 0/1
-top1_wide$Coyote.01 <- ifelse(top1_wide$CoyoteDays > 0, 1, 0)
+
+
+ggplot(top1_wide_pup, aes(x = Year, y = , PUP/ADULT)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(span = 1) +
+  facet_grid(~Site)
 
 
 
 
 
-#glmms
+#glmms ------------------------------------------
+
 library(lme4)
+library(sjPlot)
 
 m1.ADULT <- glmer(ADULT ~ 
-                scale(Year) + 
+                scale(Year) *
                 Site + 
                Season +
                #scale(Spring_BEUTI) +
@@ -314,12 +322,16 @@ m1.ADULT <- glmer(ADULT ~
                #scale(MEI) +
                scale(DisturbanceRate) +
                scale(CoyoteDays) +
-            
-               (1|Site) +
-                + (1|Season), 
+               (Site||Year) + 
+               (1|Season), 
                  family = negative.binomial(1), data = top1_wide)
 summary(m1.ADULT)
 sjPlot::plot_model(m1.ADULT, type = "eff") 
+plot_model(m1.ADULT, type = "eff", terms = "CoyoteDays [all]") #+ ylim(0.28,0.35)
+plot_model(m1.ADULT, type = "resid")
+plot_model(m1.ADULT) + ylim(0.1,3.5) 
+plot_model(m1.ADULT, type = "int")
+plot(m1.ADULT)
 plot(m1.ADULT)
 
 
@@ -333,25 +345,70 @@ target <- c("DP", "DE", "BL", "TP", "TB")
 
 top1_wide_pup <- top1_wide %>%
                  filter(Season == "Breeding") %>%
-                           filter(Site %in% target)
+                           filter(Site %in% target) %>%
+                              filter(!is.na(PUP))  # were 3 NA in the pups
+                                 # remove NA
+#lazy filtering of NAs
+top1_wide_pup <- top1_wide_pup %>% filter(!is.na(DisturbanceRate))
+top1_wide_pup <- top1_wide_pup %>% filter(!is.na(CoyoteDays))
 
-library(sjPlot)
+unique(top1_wide_pup$Year)
+unique(top1_wide_pup$Site)
+unique(top1_wide_pup$Spring_NPGO)
+unique(top1_wide_pup$DisturbanceRate)
+unique(top1_wide_pup$CoyoteDays)
 
-m1.PUP <- glmer(cbind(PUP, ADULT) ~ scale(Year) + Site +
-                  #Spring_BEUTI +
-                  MOCI_AMJ +
-                  #Spring_NPGO + 
-                  #MEI + 
-                  scale(DisturbanceRate) +
-                  scale(CoyoteDays) +
-                  (1|Site), family = binomial,# negative.binomial(1),  #poisson overdispersed
-                  #data = top1_wide)
-                  data = subset(top1_wide_pup))
 
+ggplot(top1_wide_pup, aes(x = Year, y = PUP/ADULT)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(span = 1) +
+  ylim(0,1) +
+  facet_grid(~Site)
+
+
+
+
+m1.PUP <- glmer(PUP ~ 
+                    scale(Year) + 
+                    Site + 
+                    #Season +
+                    #scale(Spring_BEUTI) +
+                    #scale(MOCI_AMJ) +
+                    scale(Spring_NPGO) +
+                    #scale(MEI) +
+                    scale(DisturbanceRate) +
+                    scale(CoyoteDays) +
+                    (1|Site), 
+                  family = negative.binomial(1), data = top1_wide_pup)
 summary(m1.PUP)
 sjPlot::plot_model(m1.PUP, type = "eff") 
 plot(m1.PUP)
 
+
+
+m1.PUP.ratio <- glmer(cbind(PUP, ADULT) ~ 
+                        scale(Year) + 
+                        Site +
+                  #Spring_BEUTI +
+                  #MOCI_AMJ +
+                  Spring_NPGO + 
+                  #MEI + 
+                  scale(DisturbanceRate) +
+                  scale(CoyoteDays) +
+                  (Year||Site), family = binomial,# negative.binomial(1),  #poisson overdispersed
+                  #data = top1_wide)
+                  data = subset(top1_wide_pup))
+
+summary(m1.PUP.ratio)
+
+plot_model(m1.PUP.ratio, type = "eff")
+plot_model(m1.PUP.ratio, type = "eff", terms = "CoyoteDays [all]") #+ ylim(0.28,0.35)
+plot_model(m1.PUP.ratio, type = "resid")
+plot_model(m1.PUP.ratio) + 
+  ylim(0.49,1.2) + 
+  geom_hline(yintercept = 1, lty = 2)
+plot_model(m1.PUP.ratio, type = "pred", terms = c("neg_c_7", "c172code"))
+plot(m1.PUP.ratio)
 
 
 ## gamm
@@ -366,7 +423,9 @@ m1.gamm <- gamm(cbind(PUP, ADULT) ~
        random=list(Site=~1), 
        family = binomial, 
      #data = top1_wide)
-     data = subset(top1_wide, Season == "Breeding"))
+     data = subset(top1_wide_pup, Season == "Breeding"))
+plot(m1.gamm$gam)
+
 
 
 m1.gamm <- gamm((PUP/ADULT) ~ 
@@ -384,41 +443,8 @@ m1.gamm <- gamm((PUP/ADULT) ~
 plot(m1.gamm$gam,pages=1)
 summary(m1.gamm$gam)
 sjPlot::plot_model(m1.gamm$gam)
-
-  
-
 plot_model(m1.gamm, type = "pred")
 
-
-m1.PUP_ADULT_BEUTI <- glmer(cbind(PUP, ADULT) ~ Year + Site +
-                  Spring_BEUTI +
-                  #MOCI_AMJ +
-                  #Spring_NPGO + 
-                  scale(CoyoteDays) +
-                  #(1|Year) + 
-                    (1|Site), family = binomial, data = top1_wide)
-summary(m1.PUP_ADULT_BEUTI)
-
-m2.PUP_ADULT_MOCI <- glmer(cbind(PUP, ADULT) ~ Year + Site +
-                        #Spring_BEUTI +
-                        JFM +
-                        #Spring_NPGO + 
-                        CoyoteDays +
-                        (1|Year) + (1|Site), family = binomial, data = top1_wide)
-summary(m2.PUP_ADULT_MOCI)
-
-m3.PUP_ADULT_NPGO <- glmer(cbind(PUP, ADULT) ~ Year + Site +
-                             #Spring_BEUTI +
-                             #MOCI_JFM +
-                             scale(Spring_NPGO) + 
-                             scale(CoyoteDays) +
-                            # (1|Year) + 
-                             (1|Site), family = binomial, data = top1_wide)
-summary(m3.PUP_ADULT_NPGO)
-
-library(sjPlot)
-plot_model(m3.PUP_ADULT_NPGO, type = "pred") #, terms = c("barthtot", "c161sex"))
-plot_model(m1.PUP_ADULT_BEUTI, type = "pred", terms="Spring_BEUTI")
 
 adult.stan.glmm <- stan_glmer(ADULT ~ 
                                 Year + 
@@ -442,6 +468,7 @@ plot_model(adult.stan.gamm, type = "pred")
 
 ## rstan
 library(rstanarm)
+library(bayesplot)
 
 adult.stan.gamm <- stan_gamm4(ADULT ~ 
                               s(Year) + 
@@ -502,21 +529,22 @@ p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide$Site, pro
 
 
 
-CHAINS <- 3
+CHAINS <- 1
 CORES <- 16
 SEED <- 123
 ITER <- 1000
-WARMUP <- 300
+WARMUP <- 400
 THIN <- 2
 
 #PRIOR <- normal(-0.022, 0.007)
 PRIOR <- normal(0, 0.05)
 
-ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~ 
+ADULT.stan.gamm <- stan_gamm4(ADULT) ~ 
     s(scale(Year) + 
-    s(Site) + 
+    Site + 
     #s(Spring_BEUTI) + 
     s(Spring_NPGO) + 
+    s(DisturbanceRate) +
     s(scale(CoyoteDays)),
   random = ~ ~(1|Site) + (1|Year), 
   data = subset(top1_wide_pup), 
@@ -524,46 +552,239 @@ ratio.stan.gamm <- stan_gamm4(cbind(PUP, ADULT) ~
   prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, thin = THIN, warmup = WARMUP, 
   adapt_delta = 0.97)
 
-beepr::beep(0)
 
-#save(ratio.stan.gamm,
-#     file = "Results/ModelOutputs/m.stan_gamm.TP_Multi.01.RData")
+## pup stan glmm
+## 2 min ART
 
-#loo.TP_Multi.gamm.1 <- loo(m.stan_gamm.TP_Multi.01, cores = getOption("mc.cores", 16))
+PUP.stan.glmm <- stan_glmer(PUP ~ 
+                                scale(Year) + 
+                                Site + 
+                                #s(Spring_BEUTI) + 
+                                scale(Spring_NPGO) + 
+                                scale(DisturbanceRate) +
+                                scale(CoyoteDays) +
+                               # (Year||Site), # + #uncorrelated intercepts and slopes among sites
+                               (1|Site) + (0+Year|Site),
+                              data = top1_wide_pup,
+                              family = neg_binomial_2,
+                              prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, 
+                              thin = THIN, warmup = WARMUP, adapt_delta = 0.98)
 
-summary(ratio.stan.gamm, digits = 3)
-performance::r2(ratio.stan.gamm)
+beepr::beep(4)
 
-color_scheme_set(scheme = "brightblue")
-p.ratio.stan.gamm <- plot_nonlinear(ratio.stan.gamm, group = top1_wide_pup$Site, 
-                                  facet_args = list(scales = "fixed", ncol = 5), prob = 0.8) #+
-  #ylim(c(-1.5,1.5))  +
-  #geom_hline(yintercept = 0, lty = 2) + 
-  #ylab("15N Trophic Poisition")
-p.ratio.stan.gamm
+summary(PUP.stan.glmm, digits = 3)
+performance::r2(PUP.stan.glmm)
 
 theme_set(theme_grey())  ## make ggplot look good
 color_scheme_set("brightblue")  # best = brightblue and pink
 ppc_intervals_grouped(
-  y = CSIA_Joined$TP_Multi,
-  yrep = posterior_predict(m.stan_gamm.TP_Multi.01),
-  x = CSIA_Joined$SOI, #CCWI,
-  group = CSIA_Joined$Species #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  y = top1_wide_pup$PUP,
+  yrep = posterior_predict(PUP.stan.glmm),
+  x = top1_wide_pup$Year, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
   #facet_args = list(ncol = 2)
 ) +
   labs(
-    x = "SOI", 
-    y = "TP Multi"
+    x = "Year", 
+    y = "Pup Count"
   ) +
   #panel_bg(fill = "gray95", color = NA) +
   #grid_lines(color = "white") +
-  geom_smooth(method = "gam", se = FALSE, span = 10) +
-  scale_y_continuous(limits = c(2.25,3.6), breaks = seq(2.25,3.6,0.25)) +
+  geom_smooth(method = "gam", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,600), breaks = seq(0,600, 100)) 
+
+
+ppc_intervals_grouped(
+  y = top1_wide_pup$PUP,
+  yrep = posterior_predict(PUP.stan.glmm),
+  x = top1_wide_pup$CoyoteDays, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "CoyoteDays", 
+    y = "Pup Count"
+  ) +
+  xlim(0, 0.4) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  geom_smooth(method = "gam", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,600), breaks = seq(0,600, 100)) 
+
+
+
+
+
+
+
+## ADULT stan glmm  
+## not running well  REDO
+## problems when random slopes (Year|Site) or (Year||Site)
+
+ADULT.stan.glmm <- stan_glmer(ADULT ~ 
+                              scale(Year) * 
+                              Site + 
+                              #s(Spring_BEUTI) + 
+                              scale(Spring_NPGO) + 
+                              scale(DisturbanceRate) +
+                              scale(CoyoteDays) +
+                              # (Year||Site), # + #uncorrelated intercepts and slopes among sites
+                              (1|Site) + 
+                                (1|Year),
+                            data = top1_wide_pup,
+                            family = neg_binomial_2,
+                            prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, 
+                            thin = THIN, warmup = WARMUP, adapt_delta = 0.96)
+
+
+
+beepr::beep(4)
+
+summary(ADULT.stan.glmm, digits = 3)
+performance::r2(ADULT.stan.glmm)
+
+
+## ADULT YEAR
+theme_set(theme_grey())  ## make ggplot look good
+color_scheme_set("brightblue")  # best = brightblue and pink
+ppc_intervals_grouped(
+  y = top1_wide_pup$ADULT,
+  yrep = posterior_predict(ADULT.stan.glmm),
+  x = top1_wide_pup$Year, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "Year", 
+    y = "Adult Breeding Season Count"
+  ) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  geom_smooth(method = "gam", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,1200), breaks = seq(0,1200, 200)) 
+
+## ADULT COYOTE
+theme_set(theme_grey())  ## make ggplot look good
+color_scheme_set("brightblue")  # best = brightblue and pink
+ppc_intervals_grouped(
+  y = top1_wide_pup$ADULT,
+  yrep = posterior_predict(ADULT.stan.glmm),
+  x = top1_wide_pup$CoyoteDays, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "Coyote sightings per survey", 
+    y = "Adult Breeding Season Count"
+  ) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  geom_smooth(method = "lm", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,1200), breaks = seq(0,1200, 200)) +
+  xlim(0, 0.4)
+
+
+## ADULT NPGO
+theme_set(theme_grey())  ## make ggplot look good
+color_scheme_set("brightblue")  # best = brightblue and pink
+ppc_intervals_grouped(
+  y = top1_wide_pup$ADULT,
+  yrep = posterior_predict(ADULT.stan.glmm),
+  x = top1_wide_pup$Spring_NPGO, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "NPGO", 
+    y = "Adult Breeding Season Count"
+  ) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  geom_smooth(method = "lm", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,1200), breaks = seq(0,1200, 200))
+
+
+
+
+
+
+
+
+## pup RATIO stan glmm
+## 4 min ART with random slopes
+
+ratio.stan.glmm <- stan_glmer(cbind(PUP, ADULT) ~ 
+                                scale(Year) * 
+                                Site + 
+                                #s(Spring_BEUTI) + 
+                                scale(Spring_NPGO) + 
+                                scale(DisturbanceRate) +
+                                scale(CoyoteDays) +
+                                (Year||Site), 
+                                  data = top1_wide_pup, 
+                                  family = binomial, 
+                                  prior = PRIOR, chains = CHAINS, cores = CORES, iter = ITER, thin = THIN, warmup = WARMUP, 
+                                  adapt_delta = 0.97)
+save(ratio.stan.glmm, file = "ratio.stan.glmm.RData")
+
+
+beepr::beep(6)
+  
+summary(ratio.stan.glmm, digits = 3)
+performance::r2(ratio.stan.glmm)
+plot_model(ratio.stan.glmm, type = "pred")
+
+
+theme_set(theme_grey())  ## make ggplot look good
+color_scheme_set("brightblue")  # best = brightblue and pink
+ppc_intervals_grouped(
+  y = (top1_wide_pup$PUP/top1_wide_pup$ADULT),
+  yrep = posterior_linpred(ratio.stan.glmm, transform = TRUE),  #use posterior_epred() for binomial back transform
+  x = top1_wide_pup$Year, 
+  group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+  #facet_args = list(ncol = 2)
+) +
+  labs(
+    x = "Year", 
+    y = "Ratio"
+  ) +
+  #panel_bg(fill = "gray95", color = NA) +
+  #grid_lines(color = "white") +
+  #geom_smooth(method = "gam", se = TRUE, span = 10) +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1, .25)) # +
   scale_x_continuous(limits = c(-2.5, 2.5)) +
   
   #geom_hline(yintercept = 0, lty = 2) +
   theme(legend.position = "none") +
   theme_grey(base_size = 16)
+
+
+  ## coyote 
+  ppc_intervals_grouped(
+    y = (top1_wide_pup$PUP/top1_wide_pup$ADULT),
+    yrep = posterior_linpred(ratio.stan.glmm, transform = TRUE),  #use posterior_epred() for binomial back transform
+    x = top1_wide_pup$CoyoteDays, 
+    group = top1_wide_pup$Site #paste(CSIA_Joined$Species, "-", CSIA_Joined$SeasonGrown), #CSIA_Joined$Species,
+    #facet_args = list(ncol = 2)
+  ) +
+    labs(
+      x = "CoyoteDays", 
+      y = "Ratio"
+    ) +
+    #panel_bg(fill = "gray95", color = NA) +
+    #grid_lines(color = "white") +
+    #geom_smooth(method = "gam", se = TRUE, span = 10) +
+    scale_y_continuous(limits = c(0,1), breaks = seq(0,1, .25)) + # +
+  scale_x_continuous(limits = c(0, 0.4))# +
+    
+    #geom_hline(yintercept = 0, lty = 2) +
+    theme(legend.position = "none") +
+    theme_grey(base_size = 16)  
+  
+  
+
+
+
 
 
 
