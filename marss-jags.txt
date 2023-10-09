@@ -1,0 +1,33 @@
+
+model {  
+   U ~ dnorm(0, 0.01);
+   tauQ~dgamma(0.001,0.001);
+   Q <- 1/tauQ;
+
+   # Estimate the initial state vector of population abundances
+   for(i in 1:nSites) {
+      X[i,1] ~ dnorm(3,0.01); # vague normal prior 
+   }
+
+   # Autoregressive process for remaining years
+   for(t in 2:nYears) {
+      for(i in 1:nSites) {
+         predX[i,t] <- X[i,t-1] + U;
+         X[i,t] ~ dnorm(predX[i,t], tauQ);
+      }
+   }
+
+   # Observation model
+
+   # The Rs are different in each site
+   for(i in 1:nSites) {
+     tauR[i]~dgamma(0.001,0.001);
+     R[i] <- 1/tauR[i];
+   }
+   for(t in 1:nYears) {
+     for(i in 1:nSites) {
+       Y[i,t] ~ dnorm(X[i,t],tauR[i]);
+     }
+   }
+}  
+

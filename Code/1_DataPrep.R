@@ -298,10 +298,35 @@ top1_wide_F <- left_join(top1_wide_E, Coyote, by = c("Year", "Site"))
 top1_wide <- top1_wide_F #ready for GLMMS
 
 
-ggplot(top1_wide_pup, aes(x = Year, y = , PUP/ADULT)) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(span = 1) +
-  facet_grid(~Site)
+## Prep data for MARSS -----------------
+top1_wide
+top1_wide_wide_ADULT <- top1_wide %>% 
+  select(Year, Site, Season, ADULT) %>%
+  distinct(Year, Site, Season, .keep_all = TRUE) %>% #remove any duplicate rows
+  pivot_wider(
+    names_from = c(Site),
+    values_from = c(ADULT)
+                    )
+
+top1_wide_wide_ADULT
+
+
+top1_wide_wide_ADULT_Molt <- top1_wide_wide_ADULT %>%
+  select(Year, Season, DP, DE, PR, BL, TP, TB, DR, PB) %>%
+  filter(Season == "Molting")
+
+top1_wide_wide_ADULT_Molt_2020 <- top1_wide_wide_ADULT %>%
+  select(Year, Season, DP, DE, PR, BL, TP, TB, DR, PB) %>%
+  filter(Season == "Molting") %>%
+  filter(Year >=2000)
+
+
+
+top1_wide_wide_ADULT_Breeding <- top1_wide_wide_ADULT %>%
+  select(Year, Season, DP, DE, PR, BL, TP, TB, DR, PB) %>%
+  filter(Season == "Breeding")
+
+## end prep MARSS data-----------
 
 
 

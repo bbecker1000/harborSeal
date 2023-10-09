@@ -122,17 +122,22 @@ DV = A. # adults
      B. pup/adult ratio (or pups with adult offset)
      C. Molt counts
 
-analyses by Breeding or Molt Seasons
+2023-04-26
+# analyses by Breeding or Molt Seasons
 
-1. GLMM / GAMM for covariates for all years
+1. Stan GLMM / GAMM for covariates for all years
   Use max from each year or fit GAMM to julian date?
 
 2. MARRS with just the MOCI or MEI or BEAUTI
-  use max from each year
+   use max adult from each year
+   1 model for Pupping season, 1 for Molt.
+   JAGS SS model with covariate?
+   full population?
+   test pop structure.
+   
+3. Make a DAG
 
-3. Other ideas HMM, or N-mixture.  Violates the repeated survey closure assumptions
-
-
+4. can't do IPM since unknown juvenile states with no count data.
 
 
 

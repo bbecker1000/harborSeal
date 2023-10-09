@@ -34,8 +34,9 @@ Phoca$Julian <- yday(Phoca$Date2)
 
 ## Looks like need to remove Dead adult and deadpup
 
-library(dplyr)
 library(plyr)
+library(dplyr)
+
 
 Phoca <- Phoca %>% filter(Age != "DEADPUP" & Age != "DEADADULT")
 unique(Phoca$Age)
@@ -73,8 +74,8 @@ d3
 ## need to fix this... must have been a dplyr update
 d3 <- d3[ -c(4:5)]
 d3
-d3 <- rename(d3, Subsite = Subsite...1) 
-d3 <- rename(d3, Year = Year...2)
+d3 <- dplyr::rename(d3, "Subsite" = "Subsite...1") 
+d3 <- dplyr::rename(d3, "Year" = "Year...2")
 ## plot just the max
 p1<-ggplot(d3, aes(Year, MaxCount)) +
   geom_point() +
@@ -85,7 +86,7 @@ p1 + facet_grid(. ~ Subsite)
 Phoca.Adult.Breed <- dplyr::filter(Phoca.Adult, Julian > 105 & Julian < 135) #April 15 to May 15
 
 Phoca.breed.seas <- dplyr::filter(Phoca, Julian > 105 & Julian < 135)
-top1 <- tbl_df(Phoca.breed.seas) %>% 
+top1 <- as_tibble(Phoca.breed.seas) %>% 
   group_by(Subsite, Yearf, Age) %>%
   top_n(n = 1, wt = Count)
 
@@ -105,7 +106,7 @@ ggsave("plot.top1.jpg", width = 8, height = 6, units = "in")
 # June 1 - JUne 30 = Julian days 150-180
  
 Phoca.molt.seas <- dplyr::filter(Phoca, Julian > 150 & Julian < 180)
-top1.molt <- tbl_df(Phoca.molt.seas) %>% 
+top1.molt <- as_tibble(Phoca.molt.seas) %>% 
   group_by(Subsite, Yearf) %>%
   top_n(n = 1, wt = Count)
 
@@ -282,7 +283,7 @@ Q.model="diagonal and equal"
 B.Model="identity"
 kem4_ind1=MARSS(dat, model=list(Z=Z.model, U=U.model, Q=Q.model, R=R.model, B=B.Model),
                     control=list(maxit=1000, safe=TRUE)) 
-kem4_ind1$AIC #3.995799
+kem4_ind1$AIC 
 
 df_aic <- df_aic %>% add_row(model = "all ind 1", aic = kem4_ind1$AIC)
 
@@ -295,7 +296,7 @@ Q.model="diagonal and equal"
 B.Model="unequal"
 kem4_ind2=MARSS(dat, model=list(Z=Z.model, U=U.model, Q=Q.model, R=R.model, B=B.Model),
                control=list(maxit=5000, safe=TRUE)) 
-kem4_ind2$AIC #4.71455
+kem4_ind2$AIC 
 
 df_aic <- df_aic %>% add_row(model = "all ind 2", aic = kem4_ind2$AIC)
 
@@ -354,7 +355,7 @@ kem4_ind7=MARSS(dat, model=list(Z=Z.model, U=U.model, Q=Q.model, R=R.model, B=B.
 kem4_ind7$AIC # 4.137058
 
 df_aic <- df_aic %>% add_row(model = "all ind 7", aic = kem4_ind7$AIC)
-
+df_aic
 
 #from first, change R and B
 # DOESN'T CONVERGE (again due to a wrongly specified model)
@@ -675,12 +676,21 @@ coef(kemNS4)
 Z.model=factor(c(1,2,2,3,3)) 
 U.model="unequal"
 Q.model="diagonal and unequal"
-R.model="diagonal and unequal" 
-B.model= "identity"  
-kem3pop2 = MARSS(dat, model=list(Z=Z.model, U=U.model, Q=Q.model, R=R.model, B=B.model), control=list(maxit=5000, safe=TRUE))
-kem3pop2$AIC #6.304194
+R.model="diagonal and unequal"
+B.model= "identity"
 
-df_aic <- df_aic %>% add_row(model = "3 pop - convergence warning", aic = kem3pop2$AIC)
+# higher AIC by 4 units with these parameter settings ------
+# R.model="diagonal and unequal"
+# U.model="unequal"
+# Q.model="diagonal and equal"
+# B.Model="unequal"
+
+kem3pop2 = MARSS(dat, model=list(Z=Z.model, U=U.model, Q=Q.model, R=R.model, B=B.model), control=list(maxit=5000, safe=TRUE))
+kem3pop2$AIC 
+
+df_aic <- df_aic %>% add_row(model = "3 pop", aic = kem3pop2$AIC)
+df_aic
+
 
 #badly specified -> convergence error
 #all nonlinear
